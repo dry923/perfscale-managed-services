@@ -115,7 +115,7 @@ def main():
     _remove_worker_label(nodes)
 
     # Add a workload label to one of the workers
-    _label_workload_machine(nodes)
+    #_label_workload_machine(nodes)
 
     # AWS configuration
     _aws_config(nodes,clustername)
