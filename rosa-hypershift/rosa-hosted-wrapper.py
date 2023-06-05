@@ -789,6 +789,10 @@ def _build_cluster(ocm_cmnd, rosa_cmnd, cluster_name_seed, must_gather_all, prov
             logging.info('Waiting for all clusters to be installed to start e2e-benchmarking execution on %s' % cluster_name)
             all_clusters_installed.wait()
         logging.info('Executing e2e-benchmarking to add load on the cluster %s with %s nodes during %s with %d iterations' % (cluster_name, str(worker_nodes), load_duration, job_iterations))
+        if args.machine_pool_name and args.machine_pool_name == "infra":
+            logging.debug("Additional infra machinepool detected. Attempting to rebalance infrastructure components")
+            # If/How should we gracefully exit if the infra components did not get rebalanced?
+            _rebalance_infra(kubeconfig)
         _cluster_load(kubeconfig, cluster_path, cluster_name, mgmt_cluster_name, service_cluster_name, load_duration, job_iterations, es_url, mgmt_kubeconfig_path, workload_type, kube_burner_version, e2e_git_details, git_branch)
         logging.info('Finished execution of e2e-benchmarking workload on %s' % cluster_name)
     if must_gather_all or process.returncode != 0:
@@ -904,6 +908,34 @@ def _add_machinepools(rosa_cmnd, kubeconfig, metadata, machinepool_name, machine
             logging.error('Unable to create machinepool %s on %s' % (machinepool_name + "-" + id, metadata['cluster_name']))
             logging.error(machinepool_stdout.strip().decode("utf-8"))
             logging.error(machinepool_stderr.strip().decode("utf-8"))
+
+def _rebalance_infra(kubeconfig):
+    load_env = os.environ.copy()
+    myenv["KUBECONFIG"] = kubeconfig
+    rollout_cmnd = ["oc", "rollout", "restart", "statefulset/prometheus-k8s", "-n", "openshift-monitoring"]
+    chk_cmnd0 = ["oc", "get", "node", "$(oc", "get", "pod", "prometheus-k8s-0", "-n", "openshift-monitoring", "-o", "'jsonpath={.spec.nodeName}')", "-o", "json"]
+    chk_cmnd1 = ["oc", "get", "node", "$(oc", "get", "pod", "prometheus-k8s-1", "-n", "openshift-monitoring", "-o", "'jsonpath={.spec.nodeName}')", "-o", "json"]
+    
+    retry = 0
+    while [ retry <= 5]:
+        rollout_process = subprocess.Popen(rollout_cmnd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=load_env)
+        rollout_stdout, rollout_stderr = rollout_process.communicate()
+        if rollout_process.returncode != 0:
+            logging.error("Failed to execute rollout command for HC infrastructure. Exiting!")
+            return 1
+        #Allow 2 minutes for prometheus to restart
+        time.sleep(120)
+        chk0_proc = subprocess.Popen(chk_cmnd0, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=load_env)
+        chk0_stdout, chk0_stderr = chk0_proc.communicate()
+        if "node-role.kubernetes.io/infra" in json.loads(chk0_stdout)["metadata"]["labels"]:
+            chk1_proc = subprocess.Popen(chk_cmnd0, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=load_env)
+            chk1_stdout, chk0_stderr = chk0_proc.communicate()
+            if "node-role.kubernetes.io/infra" in json.loads(chk1_stdout)["metadata"]["labels"]:
+                break
+        if retry == 5:
+            logging.error("Failed to move infrastructure components for HC. Exiting!")
+            return 1
+        retry += 1
 
 
 def _cluster_load(kubeconfig, my_path, hosted_cluster_name, mgmt_cluster_name, svc_cluster_name, load_duration, jobs, es_url, mgmt_kubeconfig, workload_type, kube_burner_version, e2e_git_details, git_branch):
