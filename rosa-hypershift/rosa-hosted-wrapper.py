@@ -1242,6 +1242,11 @@ def main():
         default=10,
         help='Optimus number of job iterations per worker. Workload will scale it to the number of workers')
     parser.add_argument(
+        '--cluster-load-job-iterations',
+        type=int,
+        action='store_true',
+        help='Set the specific number of job iterations for a cluster workload. NOTE: If this is set the cluster-load-jobs-per-worker and cluster0load-job-variation will be ignored')
+    parser.add_argument(
         '--cluster-load-job-variation',
         type=int,
         default=0,
@@ -1548,9 +1553,12 @@ def main():
                     else:
                         workers = int(args.workers.split(",")[(loop_counter - 1) % len(args.workers.split(","))])
                     if args.add_cluster_load:
-                        low_jobs = max(0, int((args.cluster_load_jobs_per_worker * workers) - (float(args.cluster_load_job_variation) * float(args.cluster_load_jobs_per_worker * workers) / 100)))
-                        high_jobs = int((args.cluster_load_jobs_per_worker * workers) + (float(args.cluster_load_job_variation) * float(args.cluster_load_jobs_per_worker * workers) / 100))
-                        jobs = random.randint(low_jobs, high_jobs)
+                        if args.cluster_load_job_iterations:
+                            jobs = args.cluster_load_job_iterations
+                        else:
+                            low_jobs = max(0, int((args.cluster_load_jobs_per_worker * workers) - (float(args.cluster_load_job_variation) * float(args.cluster_load_jobs_per_worker * workers) / 100)))
+                            high_jobs = int((args.cluster_load_jobs_per_worker * workers) + (float(args.cluster_load_job_variation) * float(args.cluster_load_jobs_per_worker * workers) / 100))
+                            jobs = random.randint(low_jobs, high_jobs)
                         logging.debug("Selected jobs: %d" % jobs)
                     else:
                         jobs = 0
