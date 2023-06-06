@@ -789,7 +789,7 @@ def _build_cluster(ocm_cmnd, rosa_cmnd, cluster_name_seed, must_gather_all, prov
             logging.info('Waiting for all clusters to be installed to start e2e-benchmarking execution on %s' % cluster_name)
             all_clusters_installed.wait()
         logging.info('Executing e2e-benchmarking to add load on the cluster %s with %s nodes during %s with %d iterations' % (cluster_name, str(worker_nodes), load_duration, job_iterations))
-        if args.machine_pool_name and args.machine_pool_name == "infra":
+        if args.machinepool_name and args.machinepool_name == "infra":
             logging.debug("Additional infra machinepool detected. Attempting to rebalance infrastructure components")
             # If/How should we gracefully exit if the infra components did not get rebalanced?
             _rebalance_infra(kubeconfig)
@@ -898,20 +898,20 @@ def _add_machinepools(rosa_cmnd, kubeconfig, metadata, machinepool_name, machine
             machinepool_cmd.append("--labels")
             machinepool_cmd.append(machinepool_labels)
         if machinepool_taints:
-            machinepool_cmd.append("--tains")
+            machinepool_cmd.append("--taints")
             machinepool_cmd.append(machinepool_taints)
 
         logging.debug(machinepool_cmd)
         machinepool_process = subprocess.Popen(machinepool_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         machinepool_stdout, machinepool_stderr = machinepool_process.communicate()
         if machinepool_process.returncode != 0:
-            logging.error('Unable to create machinepool %s on %s' % (machinepool_name + "-" + id, metadata['cluster_name']))
+            logging.error('Unable to create machinepool %s on %s' % (machinepool_name + "-" + str(id), metadata['cluster_name']))
             logging.error(machinepool_stdout.strip().decode("utf-8"))
             logging.error(machinepool_stderr.strip().decode("utf-8"))
 
 def _rebalance_infra(kubeconfig):
     load_env = os.environ.copy()
-    myenv["KUBECONFIG"] = kubeconfig
+    load_env["KUBECONFIG"] = kubeconfig
     rollout_cmnd = ["oc", "rollout", "restart", "statefulset/prometheus-k8s", "-n", "openshift-monitoring"]
     chk_cmnd0 = ["oc", "get", "node", "$(oc", "get", "pod", "prometheus-k8s-0", "-n", "openshift-monitoring", "-o", "'jsonpath={.spec.nodeName}')", "-o", "json"]
     chk_cmnd1 = ["oc", "get", "node", "$(oc", "get", "pod", "prometheus-k8s-1", "-n", "openshift-monitoring", "-o", "'jsonpath={.spec.nodeName}')", "-o", "json"]
@@ -1276,7 +1276,6 @@ def main():
     parser.add_argument(
         '--cluster-load-job-iterations',
         type=int,
-        action='store_true',
         help='Set the specific number of job iterations for a cluster workload. NOTE: If this is set the cluster-load-jobs-per-worker and cluster0load-job-variation will be ignored')
     parser.add_argument(
         '--cluster-load-job-variation',
